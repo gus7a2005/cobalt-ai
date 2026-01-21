@@ -1,54 +1,75 @@
-import { openai } from "@/lib/llm/openai";
+import { NextRequest, NextResponse } from "next/server";
 import { ChatMessage } from "@/types/chat";
-import { NextRequest } from "next/server";
+import { isActionConfirmation } from "@/lib/actions/isActionConfirmation";
+import { executeAction } from "@/lib/actions/executeAction";
+import { IntentPayload } from "@/lib/intents/types";
+
+let pendingIntent: IntentPayload | null = null;
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const messages: ChatMessage[] = body?.messages;
+  try {
+    const body = await req.json();
+    const messages: ChatMessage[] = body.messages;
 
-  if (!messages || !Array.isArray(messages)) {
-    return new Response(
-      JSON.stringify({ error: 'messages é obrigatório e deve ser um array' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    if (!Array.isArray(messages)) {
+      return NextResponse.json(
+        { error: "messages é obrigatório e deve ser um array" },
+        { status: 400 },
+      );
+    }
+
+    const lastMessage = messages[messages.length - 1];
+
+    if (!lastMessage) {
+      return NextResponse.json({ error: "Mensagem inválida" }, { status: 400 });
+    }
+
+    /**
+     * 1️⃣ Confirmação de ação pendente
+     */
+    if (
+      pendingIntent &&
+      lastMessage.role === "user" &&
+      isActionConfirmation(lastMessage.content)
+    ) {
+      // pendingIntent já é um IntentPayload compatível com executeAction
+      const result = executeAction(pendingIntent);
+
+      pendingIntent = null;
+
+      return NextResponse.json({
+        role: "assistant",
+        content: result,
+      });
+    }
+
+    /**
+     * 2️⃣ Nova intent detectada
+     */
+    if (lastMessage.intent && lastMessage.intent.confidence >= 0.6) {
+      pendingIntent = lastMessage.intent;
+
+      return NextResponse.json({
+        role: "assistant",
+        content:
+          "Entendi o que você quer fazer. Deseja que eu execute essa ação agora?",
+      });
+    }
+
+    /**
+     * 3️⃣ Fallback
+     */
+    return NextResponse.json({
+      role: "assistant",
+      content:
+        "Posso te ajudar com LinkedIn, carreira, networking ou criação de conteúdo.",
+    });
+  } catch (error) {
+    console.error("[CHAT_ROUTE_ERROR]", error);
+
+    return NextResponse.json(
+      { error: "Erro interno no servidor" },
+      { status: 500 },
     );
   }
-
-  const encoder = new TextEncoder();
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        const openAIMessages = messages.map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        }));
-
-        const response = await openai.responses.create({
-          model: 'gpt-4.1-mini',
-          stream: true,
-          input: openAIMessages,
-        });
-
-        for await (const event of response) {
-          if (event.type === 'response.output_text.delta') {
-            controller.enqueue(encoder.encode(event.delta));
-          }
-          if (event.type === 'response.completed') {
-            controller.close();
-          }
-        }
-      } catch (error) {
-        console.error('Erro no stream do chat:', error);
-        controller.error(error);
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
-  });
 }

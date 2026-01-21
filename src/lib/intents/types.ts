@@ -1,11 +1,16 @@
 export type IntentType = 
     | 'CREATE_POST'
-    | 'OPEN_NEW_POST'
-    | 'SEARCH_PROFILE'
+    | 'SEARCH_PEOPLE'
+    | 'OPTIMIZE_PROFILE'
+    | 'NETWORKING_ADVICE'
+    | 'JOB_SEARCH'
+    | 'CAREER_GUIDANCE'
+    | 'IMPROVE_PROFILE'
+    | 'GENERAL_CHAT'
     | 'UNKNOWN';
 
 export interface IntentPayload {
     type: IntentType,
     confidence: number,
-    data?: Record<string, unknown>,
+    data?: Record<string, unknown>;
 }
