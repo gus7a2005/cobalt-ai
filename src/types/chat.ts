@@ -1,11 +1,11 @@
-import { IntentPayload } from "@/lib/intents/types";
+import { IntentPayload } from '@/lib/intents/types';
 
-export type ChatRole = 'user' | 'assistant'
+export type ChatRole = 'user' | 'assistant' | 'system';
 
 export interface ChatMessage {
-    id: string,
-    role: ChatRole,
-    content: string,
-    createdAt: Date,
-    intent?: IntentPayload,
+  id: string;
+  role: ChatRole;
+  content: string;
+  createdAt: Date;
+  intent?: IntentPayload;
 }

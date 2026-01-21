@@ -1,25 +1,29 @@
-import { LLMStreamResponse } from "./types";
-import { OpenAI } from "openai";
+import OpenAI from 'openai';
+import { LLMStreamResponse } from './types';
+import { systemPrompt } from '@/lib/ai/systemPrompt';
 
-const openai = new OpenAI({
+export const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
 
 export async function openAIStream(
-  userMessage: string,
+  userMessage: string
 ): Promise<LLMStreamResponse> {
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [{ role: "user", content: userMessage }],
-    stream: true,
+  const stream = await openai.responses.stream({
+    model: 'gpt-4.1-mini',
+    input: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage },
+    ],
   });
 
-  async function* streamGenerator() {
-    for await (const chunk of response) {
-      const content = chunk.choices?.[0]?.delta?.content;
-      if (content) yield content;
+  async function* generator() {
+    for await (const event of stream) {
+      if (event.type === 'response.output_text.delta') {
+        yield event.delta;
+      }
     }
   }
 
-  return { stream: streamGenerator() };
+  return { stream: generator() };
 }
